@@ -14,15 +14,16 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const SUGGESTED_INQUIRIES = [
-  "Brief me on Snowflake — leadership, recent announcements, and how they're positioned against Databricks.",
-  "Explain 'retrieval-augmented generation' (RAG) in plain English, and why enterprise buyers are asking about it.",
-  "Who are the top three Customer Data Platform vendors right now, and how do they pitch differently for mid-market sales?",
+  "Brief me on Snowflake vs Databricks.",
+  "What is retrieval-augmented generation (RAG)?",
+  "Top Customer Data Platform vendors today.",
 ];
 
 const ISSUE_LABEL = "PERSONAL RESEARCH DESK  ·  EST. 07/22/1996";
 
 export function Research() {
   const [input, setInput] = useState("");
+  const [companyInput, setCompanyInput] = useState("");
   const [followUp, setFollowUp] = useState("");
   const [copyState, setCopyState] = useState<"idle" | "copied" | "error">(
     "idle",
@@ -40,11 +41,25 @@ export function Research() {
     }
   };
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const research = useChat({
     transport: new DefaultChatTransport({ api: "/api/research" }),
   });
+  const company = useChat({
+    transport: new DefaultChatTransport({ api: "/api/company-background" }),
+  });
 
-  const hasStarted = messages.length > 0;
+  const activeMode: "research" | "company" | null =
+    research.messages.length > 0
+      ? "research"
+      : company.messages.length > 0
+        ? "company"
+        : null;
+  const active = activeMode === "company" ? company : research;
+  const messages = active.messages;
+  const status = active.status;
+  const error = active.error;
+
+  const hasStarted = activeMode !== null;
   const isBusy = status === "submitted" || status === "streaming";
 
   useEffect(() => {
@@ -69,7 +84,14 @@ export function Research() {
     const query = text.trim();
     if (!query || isBusy) return;
     stickToBottom.current = true;
-    sendMessage({ text: query });
+    research.sendMessage({ text: query });
+  };
+
+  const submitCompany = (text: string) => {
+    const query = text.trim();
+    if (!query || isBusy) return;
+    stickToBottom.current = true;
+    company.sendMessage({ text: query });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -78,15 +100,26 @@ export function Research() {
     setInput("");
   };
 
+  const handleCompanySubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    submitCompany(companyInput);
+    setCompanyInput("");
+  };
+
   const handleFollowUp = (e: React.FormEvent) => {
     e.preventDefault();
-    submit(followUp);
+    const query = followUp.trim();
+    if (!query || isBusy) return;
+    stickToBottom.current = true;
+    active.sendMessage({ text: query });
     setFollowUp("");
   };
 
   const handleReset = () => {
-    setMessages([]);
+    research.setMessages([]);
+    company.setMessages([]);
     setInput("");
+    setCompanyInput("");
     setFollowUp("");
     setCopyState("idle");
   };
@@ -131,10 +164,14 @@ export function Research() {
   if (!hasStarted) {
     return (
       <main className="min-h-screen flex flex-col">
-        <Masthead theme={theme} onToggleTheme={toggleTheme} />
+        <Masthead
+          theme={theme}
+          onToggleTheme={toggleTheme}
+          onLogoClick={handleReset}
+        />
 
-        <section className="mx-auto w-full max-w-5xl flex-1 px-6 pt-12 pb-24 md:pt-20">
-          <div className="stagger flex flex-col gap-10">
+        <section className="mx-auto w-full max-w-5xl flex-1 px-6 pt-8 pb-16 md:pt-12">
+          <div className="stagger flex flex-col gap-7">
             <div className="flex items-baseline justify-between gap-4">
               <span className="eyebrow eyebrow-accent">
                 At your service
@@ -144,18 +181,19 @@ export function Research() {
               </span>
             </div>
 
-            <h1 className="font-display text-[clamp(3.25rem,9vw,7rem)] leading-[0.92] tracking-[-0.025em] text-foreground">
-              <span
-                className="block"
-                style={{ fontVariationSettings: '"opsz" 144, "SOFT" 30, "WONK" 1' }}
-              >
-                Ashley&rsquo;s
-              </span>
-              <span
-                className="block italic text-[var(--accent)]"
-                style={{ fontVariationSettings: '"opsz" 144, "SOFT" 90, "WONK" 1' }}
-              >
-                Assistant,
+            <h1 className="font-display text-[clamp(2.5rem,6.5vw,4.75rem)] leading-[0.95] tracking-[-0.025em] text-foreground">
+              <span className="block">
+                <span
+                  style={{ fontVariationSettings: '"opsz" 144, "SOFT" 30, "WONK" 1' }}
+                >
+                  Ashley&rsquo;s
+                </span>{" "}
+                <span
+                  className="italic text-[var(--accent)]"
+                  style={{ fontVariationSettings: '"opsz" 144, "SOFT" 90, "WONK" 1' }}
+                >
+                  Assistant,
+                </span>
               </span>
               <span
                 className="block"
@@ -244,6 +282,59 @@ export function Research() {
                 </div>
               </form>
             </div>
+
+            <div className="border-t border-[var(--rule)] pt-10 grid gap-10 md:grid-cols-[1fr_1.35fr] md:gap-14">
+              <div className="flex flex-col gap-3">
+                <span className="eyebrow">Briefings desk</span>
+                <p className="font-body text-lg leading-relaxed text-foreground/85">
+                  Just need a quick read on a company? Drop a name and
+                  I&rsquo;ll pull together a short briefing — industry,
+                  revenue, headcount, leadership, and recent news, all
+                  sourced.
+                </p>
+              </div>
+
+              <form
+                onSubmit={handleCompanySubmit}
+                className="flex flex-col gap-4"
+              >
+                <div className="flex items-baseline justify-between">
+                  <span className="eyebrow eyebrow-accent">
+                    Company Background
+                  </span>
+                  <span className="eyebrow">No. 0002</span>
+                </div>
+                <div className="notepad">
+                  <textarea
+                    value={companyInput}
+                    onChange={(e) => setCompanyInput(e.target.value)}
+                    placeholder="Company name (e.g. Snowflake)"
+                    rows={2}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        handleCompanySubmit(e);
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-4 pt-1">
+                  <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-muted-foreground">
+                    Return to brief · ⇧↵ for new line
+                  </span>
+                  <button
+                    type="submit"
+                    disabled={!companyInput.trim()}
+                    className="group inline-flex items-center gap-3 border border-foreground bg-foreground px-5 py-2.5 font-mono text-[0.72rem] uppercase tracking-[0.22em] text-background transition-all hover:bg-[var(--accent)] hover:border-[var(--accent)] hover:text-[var(--accent-foreground)] disabled:cursor-not-allowed disabled:border-[var(--rule)] disabled:bg-transparent disabled:text-muted-foreground"
+                  >
+                    <span>Brief me</span>
+                    <span className="transition-transform group-hover:translate-x-0.5 group-disabled:translate-x-0">
+                      →
+                    </span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </section>
 
@@ -254,7 +345,12 @@ export function Research() {
 
   return (
     <main className="min-h-screen flex flex-col">
-      <Masthead theme={theme} onToggleTheme={toggleTheme} compact>
+      <Masthead
+        theme={theme}
+        onToggleTheme={toggleTheme}
+        onLogoClick={handleReset}
+        compact
+      >
         <button
           type="button"
           onClick={handleCopy}
@@ -366,11 +462,13 @@ export function Research() {
 function Masthead({
   theme,
   onToggleTheme,
+  onLogoClick,
   compact,
   children,
 }: {
   theme: "light" | "dark";
   onToggleTheme: () => void;
+  onLogoClick?: () => void;
   compact?: boolean;
   children?: ReactNode;
 }) {
@@ -382,13 +480,16 @@ function Masthead({
         className={`mx-auto flex w-full ${compact ? "max-w-5xl py-2.5" : "max-w-6xl py-3"} items-center justify-between gap-6 px-6`}
       >
         <div className="flex items-center gap-4 min-w-0">
-          <span
-            className="font-display text-xl tracking-tight text-foreground"
+          <button
+            type="button"
+            onClick={onLogoClick}
+            aria-label="Start fresh"
+            className="font-display text-xl tracking-tight text-foreground transition-opacity hover:opacity-70 cursor-pointer"
             style={{ fontVariationSettings: '"opsz" 18, "SOFT" 30, "WONK" 0' }}
           >
             Ashley&rsquo;s
             <span className="italic text-[var(--accent)]"> Assistant</span>
-          </span>
+          </button>
           <span className="hidden sm:inline text-[var(--rule)]">·</span>
           <span className="hidden sm:block overflow-hidden whitespace-nowrap font-mono text-[0.65rem] uppercase tracking-[0.22em] text-muted-foreground">
             {ISSUE_LABEL}
